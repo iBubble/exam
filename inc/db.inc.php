@@ -1,4 +1,7 @@
 <?php
+// 显式设置时区为北京时间
+date_default_timezone_set('Asia/Shanghai');
+
 // 数据库连接配置文件
 $db_host = 'localhost';
 $db_port = '3306';
@@ -17,7 +20,7 @@ try {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
             PDO::ATTR_PERSISTENT => false,
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci, time_zone = '+08:00'"
         ]
     );
 } catch (PDOException $e) {

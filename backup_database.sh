@@ -1,6 +1,9 @@
 #!/bin/bash
 # 数据库备份脚本
 
+# 显式设置备份脚本的时区为北京时间
+export TZ='Asia/Shanghai'
+
 BACKUP_DIR="backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 DB_NAME="exam"
