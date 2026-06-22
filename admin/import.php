@@ -7,6 +7,11 @@ checkAdminLogin();
 $message = '';
 $message_type = '';
 
+if (isset($_GET['import_msg'])) {
+    $message = $_GET['import_msg'];
+    $message_type = $_GET['import_msg_type'] ?? 'success';
+}
+
 // 获取所有科目
 $stmt = $pdo->query("SELECT * FROM subjects ORDER BY id DESC");
 $subjects = $stmt->fetchAll();
@@ -38,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['excel_file'])) {
                 mkdir($upload_dir, 0777, true);
             }
             
-            $file_path = $upload_dir . uniqid() . '_' . $file['name'];
+            $file_path = $upload_dir . uniqid() . '.' . $file_ext;
             move_uploaded_file($file['tmp_name'], $file_path);
             
             try {
@@ -128,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['excel_file'])) {
                     unset($field);
                     
                     // 填空题/简答题特殊处理：正确答案为空时，从选项A中提取答案
-                    if (empty($correct_answer) && !empty($option_a) && in_array($question_type, ['填空题', '简答题'])) {
+                    if ($correct_answer === '' && $option_a !== '' && in_array($question_type, ['填空题', '简答题'])) {
                         $correct_answer = $option_a;
                         // 填空题/简答题不需要选项，清空选项字段
                         $option_a = '';
@@ -155,20 +160,43 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['excel_file'])) {
                         }
                     }
                     
-                    if (!empty($question_text) && !empty($correct_answer) && $current_subject_id > 0) {
-                        $stmt = $pdo->prepare("INSERT INTO questions 
-                            (subject_id, question_type, question_text, option_a, option_b, option_c, option_d, 
-                             correct_answer, answer_analysis, knowledge_point) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    if ($question_text !== '' && $correct_answer !== '' && $current_subject_id > 0) {
+                        // 检测重复（普通导入下，仅跟无试卷分类且题目类型、题干相同的题对比）
+                        $stmt_check = $pdo->prepare("SELECT id FROM questions WHERE subject_id = ? AND question_type = ? AND question_text = ? AND paper_id IS NULL");
+                        $stmt_check->execute([$current_subject_id, $question_type, $question_text]);
+                        $existing_question = $stmt_check->fetch();
                         
-                        if ($stmt->execute([
-                            $current_subject_id, $question_type, $question_text, 
-                            $option_a, $option_b, $option_c, $option_d,
-                            $correct_answer, $answer_analysis, $knowledge_point
-                        ])) {
-                            $success_count++;
+                        if ($existing_question) {
+                            // 存在重复，采用覆盖模式
+                            $existing_id = $existing_question['id'];
+                            $stmt_update = $pdo->prepare("UPDATE questions SET 
+                                option_a = ?, option_b = ?, option_c = ?, option_d = ?, 
+                                correct_answer = ?, answer_analysis = ?, knowledge_point = ? 
+                                WHERE id = ?");
+                            if ($stmt_update->execute([
+                                $option_a, $option_b, $option_c, $option_d,
+                                $correct_answer, $answer_analysis, $knowledge_point, $existing_id
+                            ])) {
+                                $success_count++;
+                            } else {
+                                $error_count++;
+                            }
                         } else {
-                            $error_count++;
+                            // 不重复，插入新题目
+                            $stmt = $pdo->prepare("INSERT INTO questions 
+                                (subject_id, question_type, question_text, option_a, option_b, option_c, option_d, 
+                                 correct_answer, answer_analysis, knowledge_point) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            
+                            if ($stmt->execute([
+                                $current_subject_id, $question_type, $question_text, 
+                                $option_a, $option_b, $option_c, $option_d,
+                                $correct_answer, $answer_analysis, $knowledge_point
+                            ])) {
+                                $success_count++;
+                            } else {
+                                $error_count++;
+                            }
                         }
                     } else {
                         $error_count++;
@@ -180,12 +208,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['excel_file'])) {
                 $message = "导入完成！成功：{$success_count} 条，失败：{$error_count} 条";
                 $message_type = $error_count > 0 ? 'error' : 'success';
                 
+                $redirect_url = "questions.php?import_msg=" . urlencode($message) . "&import_msg_type={$message_type}";
+                if (!$use_excel_subject && $current_subject_id > 0) {
+                    $redirect_url .= "&subject_id={$current_subject_id}";
+                }
+                header("Location: " . $redirect_url);
+                exit;
+                
             } catch (Exception $e) {
                 $message = 'Excel文件解析失败：' . $e->getMessage();
                 $message_type = 'error';
                 if (file_exists($file_path)) {
                     unlink($file_path);
                 }
+                header("Location: questions.php?import_msg=" . urlencode($message) . "&import_msg_type=error");
+                exit;
             }
         }
     }

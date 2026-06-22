@@ -8,7 +8,7 @@ echo "  Exam项目生产环境测试"
 echo "========================================="
 echo ""
 
-BASE_URL="http://home.liukun.com/Projects/Exam"
+BASE_URL="http://127.0.0.1"
 PASS_COUNT=0
 FAIL_COUNT=0
 
@@ -20,8 +20,8 @@ test_url() {
     
     echo -n "测试 $name ... "
     
-    # 使用-L跟随重定向
-    http_code=$(curl -L -s -o /dev/null -w "%{http_code}" "$url")
+    # 获取实际响应码（不跟随重定向）
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" "$url")
     
     if [ "$http_code" = "$expected_code" ]; then
         echo "✓ 通过 (HTTP $http_code)"
@@ -41,7 +41,7 @@ test_database() {
     # 创建临时PHP测试文件
     cat > /tmp/test_db.php << 'EOF'
 <?php
-require_once '/www/wwwroot/ibubble.vicp.net/Projects/Exam/inc/db.inc.php';
+require_once '/www/exam/inc/db.inc.php';
 try {
     $stmt = $pdo->query("SELECT COUNT(*) FROM students");
     $count = $stmt->fetchColumn();
@@ -106,7 +106,7 @@ echo ""
 
 echo "2. 数据库连接测试"
 echo "-----------------------------------"
-cd /www/wwwroot/ibubble.vicp.net/Projects/Exam
+cd /www/exam
 test_database
 echo ""
 
@@ -179,8 +179,8 @@ if [ $FAIL_COUNT -eq 0 ]; then
     echo "✓ 所有测试通过！项目可以部署到生产环境。"
     echo ""
     echo "访问地址:"
-    echo "  学生端: http://home.liukun.com/Projects/Exam/"
-    echo "  管理端: http://home.liukun.com/Projects/Exam/admin/"
+    echo "  学生端: https://exam.liukun.com/"
+    echo "  管理端: https://exam.liukun.com/admin/"
     exit 0
 else
     echo "✗ 有 $FAIL_COUNT 项测试失败，请检查配置。"

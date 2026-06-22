@@ -13,7 +13,7 @@
  * @return float 相似度分数（0-1之间）
  */
 function calculateTextSimilarity($student_answer, $correct_answer) {
-    if (empty($student_answer) || empty($correct_answer)) {
+    if ($student_answer === '' || $correct_answer === '') {
         return 0.0;
     }
     
@@ -21,7 +21,7 @@ function calculateTextSimilarity($student_answer, $correct_answer) {
     $student = preg_replace('/[^\p{L}\p{N}\s]/u', '', mb_strtolower(trim($student_answer)));
     $correct = preg_replace('/[^\p{L}\p{N}\s]/u', '', mb_strtolower(trim($correct_answer)));
     
-    if (empty($student) || empty($correct)) {
+    if ($student === '' || $correct === '') {
         return 0.0;
     }
     

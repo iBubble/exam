@@ -72,9 +72,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
             // 将题型配置存储为JSON
             $question_config_json = json_encode($filtered_config, JSON_UNESCAPED_UNICODE);
             
-            $stmt = $pdo->prepare("INSERT INTO papers (subject_id, title, description, total_score, duration, start_time, end_time, is_paused, shuffle_questions, question_config, created_by) 
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)");
-            $stmt->execute([$subject_id, $title, $description, $total_score, $duration, $start_time, $end_time, $shuffle_questions, $question_config_json, $_SESSION['admin_id']]);
+            $paper_categories = $_POST['paper_categories'] ?? [];
+            $question_paper_ids = !empty($paper_categories) && is_array($paper_categories) ? implode(',', array_filter(array_map('intval', $paper_categories))) : null;
+            
+            $stmt = $pdo->prepare("INSERT INTO papers (subject_id, question_paper_ids, title, description, total_score, duration, start_time, end_time, is_paused, shuffle_questions, question_config, created_by) 
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)");
+            $stmt->execute([$subject_id, $question_paper_ids, $title, $description, $total_score, $duration, $start_time, $end_time, $shuffle_questions, $question_config_json, $_SESSION['admin_id']]);
             $paper_id = $pdo->lastInsertId();
             logAdminAction($pdo, '创建考试', 'success', "ID={$paper_id}, 标题={$title}");
             
@@ -189,10 +192,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
         try {
             $current_paused = $edit_paper['is_paused'] ?? 0;
             $question_config_json = json_encode($filtered_config, JSON_UNESCAPED_UNICODE);
-            $stmt = $pdo->prepare("UPDATE papers SET subject_id = ?, title = ?, description = ?, 
+            
+            $paper_categories = $_POST['paper_categories'] ?? [];
+            $question_paper_ids = !empty($paper_categories) && is_array($paper_categories) ? implode(',', array_filter(array_map('intval', $paper_categories))) : null;
+            
+            $stmt = $pdo->prepare("UPDATE papers SET subject_id = ?, question_paper_ids = ?, title = ?, description = ?, 
                                    total_score = ?, duration = ?, start_time = ?, end_time = ?, is_paused = ?, shuffle_questions = ?, question_config = ? 
                                    WHERE id = ?");
-            $stmt->execute([$subject_id, $title, $description, $total_score, $duration, $start_time, $end_time, $current_paused, $shuffle_questions, $question_config_json, $id]);
+            $stmt->execute([$subject_id, $question_paper_ids, $title, $description, $total_score, $duration, $start_time, $end_time, $current_paused, $shuffle_questions, $question_config_json, $id]);
             
             // 更新考试班级关联
             // 先删除旧的关联
@@ -758,6 +765,11 @@ unset($paperItem);
                             <input type="text" name="title" id="modalTitleInput" required>
                         </div>
                     </div>
+                    <div class="form-group" id="paperCategoriesGroup" style="display: none;">
+                        <label>选择试卷分类（复选，不勾选默认包含该科目下所有试卷）</label>
+                        <div id="modalPaperCategoriesContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; max-height: 200px; overflow-y: auto; padding: 10px; border: 1px solid #ddd; border-radius: 6px; background: #f9f9f9;">
+                        </div>
+                    </div>
                     <div class="form-group">
                         <label>考试描述</label>
                         <textarea name="description" id="modalDescription"></textarea>
@@ -823,6 +835,8 @@ unset($paperItem);
             document.getElementById('paperForm').reset();
             document.getElementById('modalTotalScore').value = '100';
             document.getElementById('modalDuration').value = '60';
+            document.getElementById('paperCategoriesGroup').style.display = 'none';
+            document.getElementById('modalPaperCategoriesContainer').innerHTML = '';
             document.getElementById('modalQuestionTypeSelection').innerHTML = '<p style="color: #666;">请先选择科目</p>';
             document.getElementById('submitBtn').textContent = '创建考试';
             // 清除所有班级复选框
@@ -855,10 +869,11 @@ unset($paperItem);
                             cb.checked = p.classes && p.classes.includes(cb.value);
                         });
                         
-                        // 加载题型配置
+                        // 加载试卷分类和题型配置
                         if (p.subject_id) {
-                            loadQuestionTypes(p.subject_id, p.question_config || {}, p.type_order || []);
+                            loadPaperCategoriesAndTypes(p.subject_id, p.question_config || {}, p.type_order || [], p.question_paper_ids || '');
                         } else {
+                            document.getElementById('paperCategoriesGroup').style.display = 'none';
                             document.getElementById('modalQuestionTypeSelection').innerHTML = '<p style="color: #666;">请先选择科目</p>';
                         }
                         
@@ -887,16 +902,95 @@ unset($paperItem);
             }
         });
         
+        // 动态加载试卷分类复选框及关联的题型题数
+        function loadPaperCategoriesAndTypes(subjectId, editConfig = {}, editTypeOrder = [], savedPaperIds = '') {
+            const categoriesGroup = document.getElementById('paperCategoriesGroup');
+            const categoriesContainer = document.getElementById('modalPaperCategoriesContainer');
+            const typeSelection = document.getElementById('modalQuestionTypeSelection');
+            
+            if (!subjectId) {
+                categoriesGroup.style.display = 'none';
+                categoriesContainer.innerHTML = '';
+                typeSelection.innerHTML = '<p style="color: #666;">请先选择科目</p>';
+                return;
+            }
+            
+            fetch(`get_subject_papers.php?subject_id=${subjectId}`)
+                .then(response => response.json())
+                .then(data => {
+                    categoriesContainer.innerHTML = '';
+                    if (data.success && data.papers && data.papers.length > 0) {
+                        categoriesGroup.style.display = 'block';
+                        const savedIdsArray = savedPaperIds ? savedPaperIds.split(',').map(Number) : [];
+                        
+                        data.papers.forEach(paper => {
+                            const label = document.createElement('label');
+                            label.style.cssText = 'display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px; border-radius: 4px; transition: background 0.2s;';
+                            label.onmouseover = () => label.style.background = '#e9ecef';
+                            label.onmouseout = () => label.style.background = 'transparent';
+                            
+                            const checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox';
+                            checkbox.name = 'paper_categories[]';
+                            checkbox.value = paper.id;
+                            checkbox.className = 'paper-category-checkbox';
+                            if (savedIdsArray.includes(paper.id)) {
+                                checkbox.checked = true;
+                            }
+                            
+                            checkbox.addEventListener('change', () => {
+                                const checkedBoxes = categoriesContainer.querySelectorAll('.paper-category-checkbox:checked');
+                                const currentCheckedIds = Array.from(checkedBoxes).map(cb => cb.value).join(',');
+                                
+                                // 保留用户当前的输入配置，防止选择/取消选择分类时清空输入
+                                const currentConfig = {};
+                                const currentOrder = [];
+                                const items = document.querySelectorAll('#modalQuestionTypeSelection .question-type-item');
+                                items.forEach(item => {
+                                    const type = item.getAttribute('data-type');
+                                    const countSelect = item.querySelector(`select[name="question_config[${type}]"]`);
+                                    const scoreInput = item.querySelector(`input[name="question_scores[${type}]"]`);
+                                    if (countSelect) {
+                                        currentConfig[type] = {
+                                            count: parseInt(countSelect.value) || 0,
+                                            score: parseFloat(scoreInput.value) || 0
+                                        };
+                                        currentOrder.push(type);
+                                    }
+                                });
+                                loadQuestionTypes(subjectId, currentConfig, currentOrder, currentCheckedIds);
+                            });
+                            
+                            const span = document.createElement('span');
+                            span.textContent = paper.name;
+                            
+                            label.appendChild(checkbox);
+                            label.appendChild(span);
+                            categoriesContainer.appendChild(label);
+                        });
+                    } else {
+                        categoriesGroup.style.display = 'none';
+                    }
+                    
+                    loadQuestionTypes(subjectId, editConfig, editTypeOrder, savedPaperIds);
+                })
+                .catch(error => {
+                    console.error('Error loading paper categories:', error);
+                    categoriesGroup.style.display = 'none';
+                    loadQuestionTypes(subjectId, editConfig, editTypeOrder, savedPaperIds);
+                });
+        }
+        
         // 模态框中的科目选择变化事件
         document.getElementById('modalSubjectId').addEventListener('change', function() {
-            loadQuestionTypes(this.value, {}, []);
+            loadPaperCategoriesAndTypes(this.value, {}, [], '');
         });
         
-        function loadQuestionTypes(subjectId, editConfig = {}, editTypeOrder = []) {
+        function loadQuestionTypes(subjectId, editConfig = {}, editTypeOrder = [], selectedPaperIds = '') {
             const typeSelection = document.getElementById('modalQuestionTypeSelection');
             
             if (subjectId) {
-                fetch(`get_questions_by_type.php?subject_id=${subjectId}`)
+                fetch(`get_questions_by_type.php?subject_id=${subjectId}&paper_ids=${selectedPaperIds}`)
                     .then(response => response.json())
                     .then(data => {
                         typeSelection.innerHTML = '';

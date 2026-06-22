@@ -1,0 +1,212 @@
+Database count: 51
+Docx count: 14
+
+Found 51 differences:
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 1 | DB ID: 1849
+Text: 提出“现在的人工智能，前面有多少智能后面就有多少人工”的科幻作家是？（     ）...
+  * Answer differs: DB='B', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 2 | DB ID: 1850
+Text: 启动ImageNet项目并极大推动人工智能视觉发展的是哪位教授？（     ）...
+  * Answer differs: DB='C', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 3 | DB ID: 1851
+Text: 视频帧速率要避免不流畅，其最低指标通常是多少？（     ）...
+  * Answer differs: DB='C', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 4 | DB ID: 1852
+Text: 在数据标注中，声音的音调是由什么决定的？（     ）...
+  * Answer differs: DB='A', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 5 | DB ID: 1853
+Text: 中国国家标准总局发布的信息交换用汉字编码字符集基本集是？（     ）...
+  * Answer differs: DB='C', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 6 | DB ID: 1854
+Text: 在安装Label Studio时，常用的启动安装命令是？（     ）...
+  * Answer differs: DB='A', DOCX=''
+  * OPTION_A differs: DB='pip install label-studio', DOCX='图像分类'
+  * OPTION_B differs: DB='conda start label', DOCX='目标检测'
+  * OPTION_C differs: DB='label-studio run', DOCX='语义分割'
+  * OPTION_D differs: DB='npm install label-studio', DOCX='实例分割'
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 8 | DB ID: 1856
+Text: 在Label Studio中，目标检测标注主要选择的模板是？（     ）...
+  * Answer differs: DB='B', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 9 | DB ID: 1857
+Text: 依据MS COCO数据集标准，通常将分辨率小于多少像素的目标定义为小目标？（     ）...
+  * Answer differs: DB='C', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 10 | DB ID: 1858
+Text: 需要将同一类型的多个个体（如不同的羊）做独立区分的分割任务是？（     ）...
+  * Answer differs: DB='C', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 11 | DB ID: 1859
+Text: 扩展标记语言中，有且只有一个根元素的是哪种数据格式？（     ）...
+  * Answer differs: DB='C', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 12 | DB ID: 1860
+Text: 视频跨帧追踪任务中，通常用什么来表示连续视频帧中目标的位置？（     ）...
+  * Answer differs: DB='B', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 13 | DB ID: 1861
+Text: 声音的采样精度表示用多少位二进制数去表示信号强度，CD通常使用多少位？（     ）...
+  * Answer differs: DB='B', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 14 | DB ID: 1862
+Text: Label Studio在标注中，如果遇到无法确认类别的图像，可以点击哪个按钮跳过？（     ）...
+  * Answer differs: DB='C', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: 15 | DB ID: 1863
+Text: 在自然语言处理标注中，识别文本中的人名、地名的任务属于？（     ） 得 分 评卷人...
+  * Answer differs: DB='B', DOCX=''
+------------------------------------------------------------
+Type: 单选题 | Docx Num: N/A | DB ID: 1855
+Text: 判断图片中是鸡还是兔子的任务属于计算机视觉的哪种基本问题？（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 多选题 | Docx Num: N/A | DB ID: 1864
+Text: 数据标注是对未经处理的初级数据进行加工，初级数据通常包括？（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 多选题 | Docx Num: N/A | DB ID: 1865
+Text: 计算机视觉标注包含的子任务有？（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 多选题 | Docx Num: N/A | DB ID: 1866
+Text: 声音信号的基本物理属性包含哪些？（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 多选题 | Docx Num: N/A | DB ID: 1867
+Text: 以下属于Label Studio标注工具优点的有？（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 多选题 | Docx Num: N/A | DB ID: 1868
+Text: 图像分割从目的上主要分为哪几类？（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 多选题 | Docx Num: N/A | DB ID: 1869
+Text: 提升小目标检测效果的常见解决方案包括？（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 多选题 | Docx Num: N/A | DB ID: 1870
+Text: 数据标注团队的基本人员角色通常包含？（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 多选题 | Docx Num: N/A | DB ID: 1871
+Text: 在图像目标检测的质量抽检中，常见的错误有？（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 多选题 | Docx Num: N/A | DB ID: 1872
+Text: 智能语音标注相关的基础任务包括？（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 多选题 | Docx Num: N/A | DB ID: 1873
+Text: 下列关于JSON文件规则的描述，正确的有？（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 判断题 | Docx Num: N/A | DB ID: 1874
+Text: 数据标注项目中，抽检如果不达标需要返回进行返工。（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 判断题 | Docx Num: N/A | DB ID: 1875
+Text: UTF-8编码的文件建议使用with BOM格式以防数据丢失。（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 判断题 | Docx Num: N/A | DB ID: 1876
+Text: 视频采样中，444代表对Y、U、V三个通道均进行全采样。（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 判断题 | Docx Num: N/A | DB ID: 1877
+Text: 图像分类任务需要返回目标详细的坐标边界框。（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 判断题 | Docx Num: N/A | DB ID: 1878
+Text: 全景分割要求每个像素只能有一个类别和id标注，不能重叠。（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 判断题 | Docx Num: N/A | DB ID: 1879
+Text: 小目标检测常因分辨率低、特征少而容易受到环境干扰。（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 判断题 | Docx Num: N/A | DB ID: 1880
+Text: Praat是一款专业的文本处理开源注释工具。（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 判断题 | Docx Num: N/A | DB ID: 1881
+Text: 目标检测中标注框如果不匹配，可以点击拖动改变大小。（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 判断题 | Docx Num: N/A | DB ID: 1882
+Text: 视频追踪如果在后续帧中目标消失，应保留最后一帧的框不做处理。（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 判断题 | Docx Num: N/A | DB ID: 1883
+Text: 声音文件直接记录了真实声音的二进制采样数据。（ ）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 填空题 | Docx Num: N/A | DB ID: 1884
+Text: 刘慈欣曾表示：现在的人工智能，前面有多少智能后面就有多少（ ）。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 填空题 | Docx Num: N/A | DB ID: 1885
+Text: 在物理学中，声源在一秒钟内振动的次数称为频率，单位记为（ ）。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 填空题 | Docx Num: N/A | DB ID: 1886
+Text: CSV文件是以（ ）形式存储表格数据的格式，列内容以半角逗号分隔。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 填空题 | Docx Num: N/A | DB ID: 1887
+Text: Label Studio是一款（ ）应用程序，需要提前安装较新版本的浏览器。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 填空题 | Docx Num: N/A | DB ID: 1888
+Text: 将目标的分割和识别合二为一，并用矩形框标出位置的任务是（ ）。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 填空题 | Docx Num: N/A | DB ID: 1889
+Text: 提升小目标检测效果最简单有效的方法是进行数据（ ）。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 填空题 | Docx Num: N/A | DB ID: 1890
+Text: 评价声音信号受到周遭环境噪声干扰程度的指标是（ ）。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 填空题 | Docx Num: N/A | DB ID: 1891
+Text: 在语义分割基础上细化，分离前景和背景并区分同一类个体的任务是（ ）。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 填空题 | Docx Num: N/A | DB ID: 1892
+Text: 视频中标准的基本信息单元称为（ ）。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 填空题 | Docx Num: N/A | DB ID: 1893
+Text: 关键点标注为了区别左右手等对称部位，可以为其增加（ ）信息。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 简答题 | Docx Num: N/A | DB ID: 1894
+Text: 请简述数据标注的定义。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 简答题 | Docx Num: N/A | DB ID: 1895
+Text: 简述语义分割、实例分割、全景分割三者的区别。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 简答题 | Docx Num: N/A | DB ID: 1896
+Text: JSON文件具有哪些具体规则？（列举至少三条）...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 简答题 | Docx Num: N/A | DB ID: 1897
+Text: 请简述抽取式文本摘要和生成式文本摘要的区别。...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 简答题 | Docx Num: N/A | DB ID: 1898
+Text: 生成对话数据标注场景中，人机交互对话系统主要分为哪三大类？...
+  * Could not match this DB question in the docx document
+------------------------------------------------------------
+Type: 论述题 | Docx Num: N/A | DB ID: 1899
+Text: 请简述使用Label Studio工具完成汽车目标检测（Object Detection）任务的核心步骤（需包含：项目创建导入、模板选择、标...
+  * Could not match this DB question in the docx document

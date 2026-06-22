@@ -7,16 +7,30 @@ checkAdminLogin();
 header('Content-Type: application/json; charset=utf-8');
 
 $subject_id = isset($_GET['subject_id']) ? intval($_GET['subject_id']) : 0;
+$paper_ids_str = isset($_GET['paper_ids']) ? trim($_GET['paper_ids']) : '';
 
 if ($subject_id > 0) {
     try {
+        $where_clauses = ["subject_id = ?"];
+        $params = [$subject_id];
+
+        if ($paper_ids_str !== '') {
+            $paper_ids = array_filter(array_map('intval', explode(',', $paper_ids_str)));
+            if (!empty($paper_ids)) {
+                $placeholders = implode(',', array_fill(0, count($paper_ids), '?'));
+                $where_clauses[] = "paper_id IN ($placeholders)";
+                $params = array_merge($params, $paper_ids);
+            }
+        }
+        $where_sql = implode(" AND ", $where_clauses);
+
         // 按题型分组获取题目
         $stmt = $pdo->prepare("SELECT question_type, COUNT(*) as count, GROUP_CONCAT(id ORDER BY id SEPARATOR ',') as question_ids 
                                FROM questions 
-                               WHERE subject_id = ? 
+                               WHERE $where_sql 
                                GROUP BY question_type 
                                ORDER BY FIELD(question_type, '单选题', '多选题', '判断题', '填空题', '名词解释', '简答题', '实操论述题') = 0, FIELD(question_type, '单选题', '多选题', '判断题', '填空题', '名词解释', '简答题', '实操论述题')");
-        $stmt->execute([$subject_id]);
+        $stmt->execute($params);
         $type_groups = $stmt->fetchAll();
         
         // 格式化数据

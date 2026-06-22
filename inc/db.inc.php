@@ -9,7 +9,7 @@ $db_socket = '/tmp/mysql.sock';  // 指定socket路径
 
 try {
     $pdo = new PDO(
-        "mysql:unix_socket=$db_socket;dbname=$db_name;charset=utf8mb4",
+        "mysql:host=127.0.0.1;port=3306;dbname=$db_name;charset=utf8mb4",
         $db_user,
         $db_pass,
         [
@@ -25,5 +25,3 @@ try {
     error_log("数据库连接失败: " . $e->getMessage());
     die("数据库连接失败，请稍后重试");
 }
-?>
-

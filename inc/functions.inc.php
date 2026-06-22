@@ -257,8 +257,8 @@ function getSiteEmoji() {
     return $item['emoji'];
 }
 
-// 获取随机物品数据（统一数据源，避免重复）
-function getRandomItem() {
+// 获取所有随机物品数据（统一数据源，避免重复）
+function getAllRandomItems() {
     static $random_items = null;
     
     if ($random_items === null) {
@@ -356,6 +356,12 @@ function getRandomItem() {
         ];
     }
     
+    return $random_items;
+}
+
+// 获取随机物品数据（统一数据源，避免重复）
+function getRandomItem() {
+    $random_items = getAllRandomItems();
     return $random_items[array_rand($random_items)];
 }
 
@@ -364,5 +370,3 @@ function getRandomTitle() {
     $item = getRandomItem();
     return '刷啊刷刷' . $item['unit'] . $item['name'];
 }
-?>
-

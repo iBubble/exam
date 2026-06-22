@@ -7,6 +7,11 @@ checkAdminLogin();
 $message = '';
 $message_type = '';
 
+if (isset($_GET['import_msg'])) {
+    $message = $_GET['import_msg'];
+    $message_type = $_GET['import_msg_type'] ?? 'success';
+}
+
 // 删除题目
 if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id'])) {
     $id = intval($_GET['id']);
@@ -31,6 +36,9 @@ if (isset($_POST['action']) && $_POST['action'] == 'batch_delete' && isset($_POS
             if (isset($_POST['subject_id']) && intval($_POST['subject_id']) > 0) {
                 $redirect_url .= '&subject_id=' . intval($_POST['subject_id']);
             }
+            if (isset($_POST['paper_id']) && intval($_POST['paper_id']) > 0) {
+                $redirect_url .= '&paper_id=' . intval($_POST['paper_id']);
+            }
             if (isset($_POST['keyword']) && !empty(trim($_POST['keyword']))) {
                 $redirect_url .= '&keyword=' . urlencode(trim($_POST['keyword']));
             }
@@ -52,6 +60,7 @@ if (isset($_POST['action']) && $_POST['action'] == 'batch_delete' && isset($_POS
 // 添加题目
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'add') {
     $subject_id = intval($_POST['subject_id'] ?? 0);
+    $paper_id = intval($_POST['paper_id'] ?? 0);
     $question_type = trim($_POST['question_type'] ?? '');
     $question_text = trim($_POST['question_text'] ?? '');
     $option_a = trim($_POST['option_a'] ?? '');
@@ -62,13 +71,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
     $answer_analysis = trim($_POST['answer_analysis'] ?? '');
     $knowledge_point = trim($_POST['knowledge_point'] ?? '');
     
-    if ($subject_id > 0 && !empty($question_type) && !empty($question_text) && !empty($correct_answer)) {
+    if ($subject_id > 0 && $question_type !== '' && $question_text !== '' && $correct_answer !== '') {
         try {
-            $stmt = $pdo->prepare("INSERT INTO questions (subject_id, question_type, question_text, 
+            $stmt = $pdo->prepare("INSERT INTO questions (subject_id, paper_id, question_type, question_text, 
                                option_a, option_b, option_c, option_d, 
                                correct_answer, answer_analysis, knowledge_point) 
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            if ($stmt->execute([$subject_id, $question_type, $question_text, $option_a, $option_b, $option_c, $option_d, 
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            if ($stmt->execute([$subject_id, $paper_id ?: null, $question_type, $question_text, $option_a, $option_b, $option_c, $option_d, 
                             $correct_answer, $answer_analysis, $knowledge_point])) {
                 $question_id = $pdo->lastInsertId();
                 $message = '题目添加成功！';
@@ -95,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'edit') {
     $id = intval($_POST['id'] ?? 0);
     $subject_id = intval($_POST['subject_id'] ?? 0);
+    $paper_id = intval($_POST['paper_id'] ?? 0);
     $question_type = trim($_POST['question_type'] ?? '');
     $question_text = trim($_POST['question_text'] ?? '');
     $option_a = trim($_POST['option_a'] ?? '');
@@ -105,12 +115,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
     $answer_analysis = trim($_POST['answer_analysis'] ?? '');
     $knowledge_point = trim($_POST['knowledge_point'] ?? '');
     
-    if ($id > 0 && $subject_id > 0 && !empty($question_type) && !empty($question_text) && !empty($correct_answer)) {
-        $stmt = $pdo->prepare("UPDATE questions SET subject_id = ?, question_type = ?, question_text = ?, 
+    if ($id > 0 && $subject_id > 0 && $question_type !== '' && $question_text !== '' && $correct_answer !== '') {
+        $stmt = $pdo->prepare("UPDATE questions SET subject_id = ?, paper_id = ?, question_type = ?, question_text = ?, 
                                option_a = ?, option_b = ?, option_c = ?, option_d = ?, 
                                correct_answer = ?, answer_analysis = ?, knowledge_point = ? 
                                WHERE id = ?");
-        if ($stmt->execute([$subject_id, $question_type, $question_text, $option_a, $option_b, $option_c, $option_d, 
+        if ($stmt->execute([$subject_id, $paper_id ?: null, $question_type, $question_text, $option_a, $option_b, $option_c, $option_d, 
                             $correct_answer, $answer_analysis, $knowledge_point, $id])) {
             $message = '题目更新成功！';
             $message_type = 'success';
@@ -129,11 +139,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
 
 // 导入题库
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'import' && isset($_FILES['excel_file'])) {
-    $use_excel_subject = isset($_POST['use_excel_subject']) && $_POST['use_excel_subject'] == '1';
-    $subject_id = !$use_excel_subject ? intval($_POST['subject_id'] ?? 0) : 0;
+    $subject_id = intval($_POST['subject_id'] ?? 0);
+    $paper_id_post = $_POST['paper_id'] ?? '';
+    $new_paper_name = trim($_POST['new_paper_name'] ?? '');
     
-    if (!$use_excel_subject && $subject_id <= 0) {
-        $message = '请选择科目或选择使用Excel中的目录字段！';
+    if ($subject_id <= 0) {
+        $message = '请选择科目！';
         $message_type = 'error';
     } elseif (!isset($_FILES['excel_file']) || $_FILES['excel_file']['error'] != UPLOAD_ERR_OK) {
         $message = '文件上传失败！';
@@ -154,10 +165,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                 mkdir($upload_dir, 0777, true);
             }
             
-            $file_path = $upload_dir . uniqid() . '_' . $file['name'];
+            $file_path = $upload_dir . uniqid() . '.' . $file_ext;
             move_uploaded_file($file['tmp_name'], $file_path);
             
             try {
+                // 处理试卷分类（如果选择了新建试卷分类）
+                $paper_id = 0;
+                if ($paper_id_post === 'new_paper' && !empty($new_paper_name)) {
+                    $stmt = $pdo->prepare("SELECT id FROM subject_papers WHERE subject_id = ? AND name = ?");
+                    $stmt->execute([$subject_id, $new_paper_name]);
+                    $existing_paper = $stmt->fetch();
+                    if ($existing_paper) {
+                        $paper_id = $existing_paper['id'];
+                    } else {
+                        $stmt = $pdo->prepare("INSERT INTO subject_papers (subject_id, name) VALUES (?, ?)");
+                        $stmt->execute([$subject_id, $new_paper_name]);
+                        $paper_id = $pdo->lastInsertId();
+                        logAdminAction($pdo, '创建试卷分类', 'success', "名称={$new_paper_name}（导入时创建）");
+                    }
+                } elseif (intval($paper_id_post) > 0) {
+                    $paper_id = intval($paper_id_post);
+                }
+
                 $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($file_path);
                 $spreadsheet = $reader->load($file_path);
                 $worksheet = $spreadsheet->getActiveSheet();
@@ -244,7 +273,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                     unset($field);
                     
                     // 填空题/简答题特殊处理：正确答案为空时，从选项A中提取答案
-                    if (empty($correct_answer) && !empty($option_a) && in_array($question_type, ['填空题', '简答题'])) {
+                    if ($correct_answer === '' && $option_a !== '' && in_array($question_type, ['填空题', '简答题'])) {
                         $correct_answer = $option_a;
                         // 填空题/简答题不需要选项，清空选项字段
                         $option_a = '';
@@ -255,37 +284,50 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                     
                     // 处理科目ID
                     $current_subject_id = $subject_id;
-                    if ($use_excel_subject && !empty($subject_name)) {
-                        // 根据Excel中的目录（科目名称）查找或创建科目
-                        $stmt = $pdo->prepare("SELECT id FROM subjects WHERE name = ?");
-                        $stmt->execute([$subject_name]);
-                        $existing_subject = $stmt->fetch();
-                        
-                        if ($existing_subject) {
-                            $current_subject_id = $existing_subject['id'];
-                        } else {
-                            // 如果科目不存在，创建新科目
-                            $stmt = $pdo->prepare("INSERT INTO subjects (name) VALUES (?)");
-                            $stmt->execute([$subject_name]);
-                            $current_subject_id = $pdo->lastInsertId();
-                            logAdminAction($pdo, '创建科目', 'success', "名称={$subject_name}（导入时自动创建）");
-                        }
-                    }
                     
-                    if (!empty($question_text) && !empty($correct_answer) && $current_subject_id > 0) {
-                        $stmt = $pdo->prepare("INSERT INTO questions 
-                            (subject_id, question_type, question_text, option_a, option_b, option_c, option_d, 
-                             correct_answer, answer_analysis, knowledge_point) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                        
-                        if ($stmt->execute([
-                            $current_subject_id, $question_type, $question_text, 
-                            $option_a, $option_b, $option_c, $option_d,
-                            $correct_answer, $answer_analysis, $knowledge_point
-                        ])) {
-                            $success_count++;
+                    if ($question_text !== '' && $correct_answer !== '' && $current_subject_id > 0) {
+                        // 检测重复（试卷分类相同且题目类型、题干相同才算重复）
+                        $check_paper_id = $paper_id ?: null;
+                        if ($check_paper_id === null) {
+                            $stmt_check = $pdo->prepare("SELECT id FROM questions WHERE subject_id = ? AND question_type = ? AND question_text = ? AND paper_id IS NULL");
+                            $stmt_check->execute([$current_subject_id, $question_type, $question_text]);
                         } else {
-                            $error_count++;
+                            $stmt_check = $pdo->prepare("SELECT id FROM questions WHERE subject_id = ? AND question_type = ? AND question_text = ? AND paper_id = ?");
+                            $stmt_check->execute([$current_subject_id, $question_type, $question_text, $check_paper_id]);
+                        }
+                        $existing_question = $stmt_check->fetch();
+                        
+                        if ($existing_question) {
+                            // 存在重复，采用覆盖模式
+                            $existing_id = $existing_question['id'];
+                            $stmt_update = $pdo->prepare("UPDATE questions SET 
+                                paper_id = ?, option_a = ?, option_b = ?, option_c = ?, option_d = ?, 
+                                correct_answer = ?, answer_analysis = ?, knowledge_point = ? 
+                                WHERE id = ?");
+                            if ($stmt_update->execute([
+                                $paper_id ?: null, $option_a, $option_b, $option_c, $option_d,
+                                $correct_answer, $answer_analysis, $knowledge_point, $existing_id
+                            ])) {
+                                $success_count++;
+                            } else {
+                                $error_count++;
+                            }
+                        } else {
+                            // 不重复，插入新题目
+                            $stmt = $pdo->prepare("INSERT INTO questions 
+                                (subject_id, paper_id, question_type, question_text, option_a, option_b, option_c, option_d, 
+                                 correct_answer, answer_analysis, knowledge_point) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                            
+                            if ($stmt->execute([
+                                $current_subject_id, $paper_id ?: null, $question_type, $question_text, 
+                                $option_a, $option_b, $option_c, $option_d,
+                                $correct_answer, $answer_analysis, $knowledge_point
+                            ])) {
+                                $success_count++;
+                            } else {
+                                $error_count++;
+                            }
                         }
                     } else {
                         $error_count++;
@@ -298,6 +340,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                 $message_type = $error_count > 0 ? 'error' : 'success';
                 logAdminAction($pdo, '导入题库', 'success', "成功={$success_count}, 失败={$error_count}");
                 
+                header("Location: questions.php?subject_id={$current_subject_id}&paper_id={$paper_id}&import_msg=" . urlencode($message) . "&import_msg_type={$message_type}");
+                exit;
+                
             } catch (Exception $e) {
                 $message = 'Excel文件解析失败：' . $e->getMessage();
                 $message_type = 'error';
@@ -305,6 +350,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                     unlink($file_path);
                 }
                 logAdminAction($pdo, '导入题库', 'failed', $e->getMessage());
+                header("Location: questions.php?import_msg=" . urlencode($message) . "&import_msg_type=error");
+                exit;
             }
         }
     }
@@ -318,6 +365,7 @@ if (isset($_GET['msg']) && $_GET['msg'] == 'batch_delete_success' && isset($_GET
 
 // 获取筛选条件
 $subject_id = isset($_GET['subject_id']) ? intval($_GET['subject_id']) : 0;
+$paper_id = isset($_GET['paper_id']) ? intval($_GET['paper_id']) : 0;
 $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
 
 // 分页参数
@@ -337,6 +385,11 @@ if ($subject_id > 0) {
     $params[] = $subject_id;
 }
 
+if ($paper_id > 0) {
+    $where[] = "q.paper_id = ?";
+    $params[] = $paper_id;
+}
+
 if (!empty($keyword)) {
     $where[] = "(q.question_text LIKE ? OR q.knowledge_point LIKE ?)";
     $params[] = "%{$keyword}%";
@@ -348,6 +401,14 @@ $where_sql = !empty($where) ? "WHERE " . implode(" AND ", $where) : "";
 // 获取所有科目（优化：只获取需要的字段）
 $stmt = $pdo->query("SELECT id, name FROM subjects ORDER BY id DESC");
 $subjects = $stmt->fetchAll();
+
+// 如果选择了科目，获取该科目下的所有试卷分类
+$subject_papers = [];
+if ($subject_id > 0) {
+    $stmt = $pdo->prepare("SELECT id, name FROM subject_papers WHERE subject_id = ? ORDER BY id DESC");
+    $stmt->execute([$subject_id]);
+    $subject_papers = $stmt->fetchAll();
+}
 
 // 获取总记录数
 $count_sql = "SELECT COUNT(*) as total FROM questions q $where_sql";
@@ -365,8 +426,9 @@ if ($per_page > 0) {
 }
 
 // 获取题目列表
-$sql = "SELECT q.*, s.name as subject_name FROM questions q 
+$sql = "SELECT q.*, s.name as subject_name, sp.name as paper_name FROM questions q 
         LEFT JOIN subjects s ON q.subject_id = s.id 
+        LEFT JOIN subject_papers sp ON q.paper_id = sp.id 
         $where_sql 
         ORDER BY q.id DESC";
 if ($per_page > 0) {
@@ -569,12 +631,24 @@ $questions = $stmt->fetchAll();
                 <div class="form-row" style="align-items: center; gap: 12px;">
                     <div class="form-group">
                         <label>科目</label>
-                        <select name="subject_id">
+                        <select name="subject_id" id="filterSubjectId">
                             <option value="">全部科目</option>
                             <?php foreach ($subjects as $subject): ?>
                                 <option value="<?php echo $subject['id']; ?>" 
                                     <?php echo $subject_id == $subject['id'] ? 'selected' : ''; ?>>
                                     <?php echo escape($subject['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>试卷分类</label>
+                        <select name="paper_id" id="filterPaperId">
+                            <option value="">全部试卷</option>
+                            <?php foreach ($subject_papers as $sp): ?>
+                                <option value="<?php echo $sp['id']; ?>" 
+                                    <?php echo $paper_id == $sp['id'] ? 'selected' : ''; ?>>
+                                    <?php echo escape($sp['name']); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -623,6 +697,7 @@ $questions = $stmt->fetchAll();
                 <input type="hidden" name="action" value="batch_delete">
                 <input type="hidden" name="question_ids" id="questionIds" value="">
                 <input type="hidden" name="subject_id" value="<?php echo $subject_id; ?>">
+                <input type="hidden" name="paper_id" value="<?php echo $paper_id; ?>">
                 <input type="hidden" name="keyword" value="<?php echo escape($keyword); ?>">
                 <input type="hidden" name="per_page" value="<?php echo $per_page; ?>">
                 <input type="hidden" name="page" value="<?php echo $current_page; ?>">
@@ -635,6 +710,7 @@ $questions = $stmt->fetchAll();
                         </th>
                         <th>ID</th>
                         <th>科目</th>
+                        <th>试卷分类</th>
                         <th>类型</th>
                         <th>题干</th>
                         <th>知识点</th>
@@ -644,7 +720,7 @@ $questions = $stmt->fetchAll();
                 <tbody>
                     <?php if (empty($questions)): ?>
                         <tr>
-                            <td colspan="7" style="text-align: center;">暂无题目</td>
+                            <td colspan="8" style="text-align: center;">暂无题目</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($questions as $q): ?>
@@ -654,6 +730,7 @@ $questions = $stmt->fetchAll();
                                 </td>
                                 <td><?php echo $q['id']; ?></td>
                                 <td><?php echo escape($q['subject_name'] ?? ''); ?></td>
+                                <td><?php echo escape($q['paper_name'] ?? '-'); ?></td>
                                 <td><?php echo escape($q['question_type']); ?></td>
                                 <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
                                     <?php echo escape(mb_substr($q['question_text'], 0, 50)); ?>...
@@ -666,6 +743,7 @@ $questions = $stmt->fetchAll();
                                         // 构建删除URL，保留所有查询参数
                                         $delete_url = '?action=delete&id=' . $q['id'];
                                         if ($subject_id > 0) $delete_url .= '&subject_id=' . $subject_id;
+                                        if ($paper_id > 0) $delete_url .= '&paper_id=' . $paper_id;
                                         if (!empty($keyword)) $delete_url .= '&keyword=' . urlencode($keyword);
                                         if ($per_page > 0) $delete_url .= '&per_page=' . $per_page;
                                         $delete_url .= '&page=' . $current_page;
@@ -692,6 +770,7 @@ $questions = $stmt->fetchAll();
                     // 构建URL参数
                     $url_params = [];
                     if ($subject_id > 0) $url_params[] = 'subject_id=' . $subject_id;
+                    if ($paper_id > 0) $url_params[] = 'paper_id=' . $paper_id;
                     if (!empty($keyword)) $url_params[] = 'keyword=' . urlencode($keyword);
                     if ($per_page > 0) $url_params[] = 'per_page=' . $per_page;
                     $url_suffix = !empty($url_params) ? '&' . implode('&', $url_params) : '';
@@ -766,6 +845,12 @@ $questions = $stmt->fetchAll();
                                 </select>
                             </div>
                             <div class="form-group">
+                                <label>试卷分类</label>
+                                <select name="paper_id" id="formPaperId">
+                                    <option value="">无试卷分类</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
                                 <label>题目类型 *</label>
                                 <select name="question_type" id="formQuestionType" required>
                                     <option value="">请选择类型</option>
@@ -835,38 +920,34 @@ $questions = $stmt->fetchAll();
                     <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
                         <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 16px;">Excel文件格式说明</h3>
                         <p style="margin-bottom: 10px;">Excel文件第一行必须包含以下字段名（字段名必须完全匹配，顺序不限）：</p>
-                        <ul style="line-height: 2; margin-bottom: 0;">
-                            <li><strong>目录</strong>（科目名称，如果选择"使用Excel中的目录字段"，则根据此字段自动创建或匹配科目）</li>
-                            <li><strong>题目类型</strong>（必需）</li>
-                            <li><strong>大题题干</strong>（必需）</li>
-                            <li><strong>选项A</strong></li>
-                            <li><strong>选项B</strong></li>
-                            <li><strong>选项C</strong></li>
-                            <li><strong>选项D</strong></li>
-                            <li><strong>正确答案</strong>（必需）</li>
-                            <li><strong>答案解析</strong></li>
-                            <li><strong>知识点</strong></li>
-                        </ul>
+                        <p style="line-height: 1.8; margin-bottom: 0; font-size: 14px; color: #495057;">
+                            包含字段：<strong>目录</strong>（科目名称，导入时以选择的科目为准）、<strong>题目类型</strong>（必需）、<strong>大题题干</strong>（必需）、<strong>选项A</strong>、<strong>选项B</strong>、<strong>选项C</strong>、<strong>选项D</strong>、<strong>正确答案</strong>（必需）、<strong>答案解析</strong>、<strong>知识点</strong>。
+                        </p>
                         <p style="margin-top: 10px; margin-bottom: 0; color: #666; font-size: 12px;">
                             <strong>说明：</strong>系统会根据第一行的字段名自动匹配，Excel中可以包含其他不需要导入的列，这些列会被忽略。
                         </p>
                     </div>
                     <form method="POST" enctype="multipart/form-data" id="importForm">
                         <input type="hidden" name="action" value="import">
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" name="use_excel_subject" value="1" id="use_excel_subject" onchange="toggleSubjectSelect()">
-                                使用Excel中的"目录"字段作为科目（如果勾选，将根据Excel第一列的目录名称自动创建或匹配科目）
-                            </label>
-                        </div>
                         <div class="form-group" id="subject_select_group">
-                            <label>选择科目 *（如果未勾选使用Excel目录字段）</label>
-                            <select name="subject_id" id="import_subject_id">
+                            <label>选择科目 *</label>
+                            <select name="subject_id" id="import_subject_id" required>
                                 <option value="">请选择科目</option>
                                 <?php foreach ($subjects as $subject): ?>
                                     <option value="<?php echo $subject['id']; ?>"><?php echo escape($subject['name']); ?></option>
                                 <?php endforeach; ?>
                             </select>
+                        </div>
+                        <div class="form-group" id="import_paper_select_group" style="display: none;">
+                            <label>选择试卷分类</label>
+                            <select name="paper_id" id="import_paper_id">
+                                <option value="">无试卷分类</option>
+                                <option value="new_paper">[新建试卷分类]</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="import_new_paper_group" style="display: none;">
+                            <label>输入新建试卷分类名称 *</label>
+                            <input type="text" name="new_paper_name" id="import_new_paper_name" placeholder="请输入分类名称，如：科目名B卷">
                         </div>
                         <div class="form-group">
                             <label>选择Excel文件 *</label>
@@ -882,12 +963,108 @@ $questions = $stmt->fetchAll();
         </div>
 
         <script>
+            // 动态加载试卷分类下拉框的辅助函数
+            function loadSubjectPapers(subjectId, selectElementId, selectedPaperId = 0) {
+                const selectEl = document.getElementById(selectElementId);
+                const defaultText = selectElementId === 'filterPaperId' ? '全部试卷' : '无试卷分类';
+                
+                if (!subjectId) {
+                    selectEl.innerHTML = `<option value="">${defaultText}</option>`;
+                    return Promise.resolve();
+                }
+                
+                return fetch('get_subject_papers.php?subject_id=' + subjectId)
+                    .then(response => response.json())
+                    .then(data => {
+                        selectEl.innerHTML = `<option value="">${defaultText}</option>`;
+                        if (data.success && data.papers) {
+                            data.papers.forEach(paper => {
+                                const option = document.createElement('option');
+                                option.value = paper.id;
+                                option.textContent = paper.name;
+                                if (paper.id == selectedPaperId) {
+                                    option.selected = true;
+                                }
+                                selectEl.appendChild(option);
+                            });
+                        }
+                        if (selectElementId === 'import_paper_id') {
+                            const newOpt = document.createElement('option');
+                            newOpt.value = 'new_paper';
+                            newOpt.textContent = '[新建试卷分类]';
+                            if (selectedPaperId === 'new_paper') {
+                                newOpt.selected = true;
+                            }
+                            selectEl.appendChild(newOpt);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading subject papers:', error);
+                        selectEl.innerHTML = `<option value="">${defaultText}</option>`;
+                    });
+            }
+
+            // 绑定科目选择的联动事件
+            document.addEventListener('DOMContentLoaded', function() {
+                const filterSubject = document.getElementById('filterSubjectId');
+                if (filterSubject) {
+                    filterSubject.addEventListener('change', function() {
+                        loadSubjectPapers(this.value, 'filterPaperId');
+                    });
+                }
+                
+                const formSubject = document.getElementById('formSubjectId');
+                if (formSubject) {
+                    formSubject.addEventListener('change', function() {
+                        loadSubjectPapers(this.value, 'formPaperId');
+                    });
+                }
+
+                // 导入弹窗中的科目和试卷联动
+                const importSubject = document.getElementById('import_subject_id');
+                if (importSubject) {
+                    importSubject.addEventListener('change', function() {
+                        const paperSelectGroup = document.getElementById('import_paper_select_group');
+                        const newPaperGroup = document.getElementById('import_new_paper_group');
+                        const newPaperInput = document.getElementById('import_new_paper_name');
+                        
+                        newPaperGroup.style.display = 'none';
+                        newPaperInput.removeAttribute('required');
+                        newPaperInput.value = '';
+                        
+                        if (this.value) {
+                            paperSelectGroup.style.display = 'block';
+                            loadSubjectPapers(this.value, 'import_paper_id');
+                        } else {
+                            paperSelectGroup.style.display = 'none';
+                            document.getElementById('import_paper_id').innerHTML = '<option value="">无试卷分类</option>';
+                        }
+                    });
+                }
+
+                const importPaper = document.getElementById('import_paper_id');
+                if (importPaper) {
+                    importPaper.addEventListener('change', function() {
+                        const newPaperGroup = document.getElementById('import_new_paper_group');
+                        const newPaperInput = document.getElementById('import_new_paper_name');
+                        if (this.value === 'new_paper') {
+                            newPaperGroup.style.display = 'block';
+                            newPaperInput.setAttribute('required', 'required');
+                        } else {
+                            newPaperGroup.style.display = 'none';
+                            newPaperInput.removeAttribute('required');
+                        }
+                    });
+                }
+            });
+
             // 打开添加模态框
             function openAddModal() {
                 document.getElementById('modalTitle').textContent = '添加题目';
                 document.getElementById('formAction').value = 'add';
                 document.getElementById('questionId').value = '';
                 document.getElementById('questionForm').reset();
+                document.getElementById('formPaperId').innerHTML = '<option value="">无试卷分类</option>';
                 document.getElementById('submitBtn').textContent = '添加题目';
                 document.getElementById('questionModal').classList.add('active');
                 document.body.style.overflow = 'hidden';
@@ -915,8 +1092,12 @@ $questions = $stmt->fetchAll();
                             document.getElementById('formAnswerAnalysis').value = q.answer_analysis || '';
                             document.getElementById('formKnowledgePoint').value = q.knowledge_point || '';
                             document.getElementById('submitBtn').textContent = '更新题目';
-                            document.getElementById('questionModal').classList.add('active');
-                            document.body.style.overflow = 'hidden';
+                            
+                            // 动态加载并选中试卷分类
+                            loadSubjectPapers(q.subject_id, 'formPaperId', q.paper_id || 0).then(() => {
+                                document.getElementById('questionModal').classList.add('active');
+                                document.body.style.overflow = 'hidden';
+                            });
                         } else {
                             alert('获取题目信息失败：' + (data.message || '未知错误'));
                         }
@@ -943,6 +1124,10 @@ $questions = $stmt->fetchAll();
             
             // 打开导入模态框
             function openImportModal() {
+                document.getElementById('importForm').reset();
+                document.getElementById('import_paper_select_group').style.display = 'none';
+                document.getElementById('import_new_paper_group').style.display = 'none';
+                document.getElementById('import_new_paper_name').removeAttribute('required');
                 document.getElementById('importModal').classList.add('active');
                 document.body.style.overflow = 'hidden';
             }
@@ -953,28 +1138,20 @@ $questions = $stmt->fetchAll();
                 document.body.style.overflow = '';
             }
             
-            // 切换科目选择显示
-            function toggleSubjectSelect() {
-                const useExcel = document.getElementById('use_excel_subject').checked;
-                const subjectSelect = document.getElementById('import_subject_id');
-                const subjectGroup = document.getElementById('subject_select_group');
-                if (useExcel) {
-                    subjectSelect.removeAttribute('required');
-                    subjectGroup.style.display = 'none';
-                } else {
-                    subjectSelect.setAttribute('required', 'required');
-                    subjectGroup.style.display = 'block';
-                }
-            }
-            
             // 导入表单提交验证
             document.getElementById('importForm').addEventListener('submit', function(e) {
-                const useExcel = document.getElementById('use_excel_subject').checked;
                 const subjectId = document.getElementById('import_subject_id').value;
-                
-                if (!useExcel && !subjectId) {
+                if (!subjectId) {
                     e.preventDefault();
-                    alert('请选择科目或勾选"使用Excel中的目录字段"！');
+                    alert('请选择科目！');
+                    return false;
+                }
+                
+                const paperId = document.getElementById('import_paper_id').value;
+                const newPaperName = document.getElementById('import_new_paper_name').value.trim();
+                if (paperId === 'new_paper' && !newPaperName) {
+                    e.preventDefault();
+                    alert('请输入新建试卷分类名称！');
                     return false;
                 }
             });

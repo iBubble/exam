@@ -583,7 +583,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         <?php if (!isset($_SESSION['student_id'])): ?>
         (function() {
             // 物品列表数据
-            const items = <?php echo json_encode($random_items, JSON_UNESCAPED_UNICODE); ?>;
+            const items = <?php echo json_encode(getAllRandomItems(), JSON_UNESCAPED_UNICODE); ?>;
             
             // 颜色方案
             const colorPalettes = <?php echo json_encode($color_palettes); ?>;

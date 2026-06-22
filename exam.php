@@ -68,9 +68,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
     
     $subject_id = $paper['subject_id'];
     
-    // 获取该科目下各题型的总题数
-    $stmtTotalByType = $pdo->prepare("SELECT question_type, COUNT(*) as total FROM questions WHERE subject_id = ? GROUP BY question_type");
-    $stmtTotalByType->execute([$subject_id]);
+    // 获取该科目下各题型的总题数（如果有限制则从指定的试卷分类中计算）
+    $paper_ids_str = $paper['question_paper_ids'] ?? '';
+    $total_where = "subject_id = ?";
+    $total_params = [$subject_id];
+    if (!empty($paper_ids_str)) {
+        $paper_ids = array_filter(array_map('intval', explode(',', $paper_ids_str)));
+        if (!empty($paper_ids)) {
+            $placeholders = implode(',', array_fill(0, count($paper_ids), '?'));
+            $total_where .= " AND paper_id IN ($placeholders)";
+            $total_params = array_merge($total_params, $paper_ids);
+        }
+    }
+    $stmtTotalByType = $pdo->prepare("SELECT question_type, COUNT(*) as total FROM questions WHERE $total_where GROUP BY question_type");
+    $stmtTotalByType->execute($total_params);
     $total_by_type = $stmtTotalByType->fetchAll(PDO::FETCH_KEY_PAIR);
 
     // 获取该学生在该科目下已经完成的考试次数（用于控制覆盖率进度）
@@ -121,13 +132,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                 // 构造 NOT IN 占位符
                 $placeholders = implode(',', array_fill(0, count($seen_ids), '?'));
                 // 优化：先获取所有题目，然后在PHP中随机选择（避免ORDER BY RAND()的性能问题）
-                $sql = "
-                    SELECT * 
-                    FROM questions 
-                    WHERE subject_id = ? AND question_type = ?
-                ";
+                $sql_where = "subject_id = ? AND question_type = ?";
+                $sql_params = [$subject_id, $type];
+                if (!empty($paper_ids_str)) {
+                    $paper_ids = array_filter(array_map('intval', explode(',', $paper_ids_str)));
+                    if (!empty($paper_ids)) {
+                        $placeholders = implode(',', array_fill(0, count($paper_ids), '?'));
+                        $sql_where .= " AND paper_id IN ($placeholders)";
+                        $sql_params = array_merge($sql_params, $paper_ids);
+                    }
+                }
+                $sql = "SELECT * FROM questions WHERE $sql_where";
                 $stmt = $pdo->prepare($sql);
-                $stmt->execute([$subject_id, $type]);
+                $stmt->execute($sql_params);
                 $all_questions = $stmt->fetchAll();
                 
                 // 分离已做和未做的题目
@@ -170,8 +187,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                 }
             } else {
                 // 学生还没做过该题型，获取所有题目后在PHP中随机选择（避免ORDER BY RAND()）
-                $stmt = $pdo->prepare("SELECT * FROM questions WHERE subject_id = ? AND question_type = ?");
-                $stmt->execute([$subject_id, $type]);
+                $sql_where = "subject_id = ? AND question_type = ?";
+                $sql_params = [$subject_id, $type];
+                if (!empty($paper_ids_str)) {
+                    $paper_ids = array_filter(array_map('intval', explode(',', $paper_ids_str)));
+                    if (!empty($paper_ids)) {
+                        $placeholders = implode(',', array_fill(0, count($paper_ids), '?'));
+                        $sql_where .= " AND paper_id IN ($placeholders)";
+                        $sql_params = array_merge($sql_params, $paper_ids);
+                    }
+                }
+                $sql = "SELECT * FROM questions WHERE $sql_where";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($sql_params);
                 $all_questions = $stmt->fetchAll();
                 shuffle($all_questions);
                 $type_questions = array_slice($all_questions, 0, $count);
@@ -590,7 +618,7 @@ $remaining_time = max(0, $end_time - $current_time);
 $correct_answers_map = [];
 foreach ($questions as $q) {
     $answer = trim($q['correct_answer']);
-    if (!empty($answer)) {
+    if ($answer !== '') {
         $correct_answers_map[$q['id']] = $answer;
     }
 }
@@ -601,7 +629,7 @@ if ($test_json === false) {
     $correct_answers_map = [];
     foreach ($questions as $q) {
         $answer = trim($q['correct_answer']);
-        if (!empty($answer)) {
+        if ($answer !== '') {
             $test_single = json_encode($answer, JSON_UNESCAPED_UNICODE);
             if ($test_single !== false) {
                 $correct_answers_map[$q['id']] = $answer;
