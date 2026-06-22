@@ -3,5 +3,7 @@ uploads/
 docs/*.xls
 docs/*.xlsx
 docs/*.csv
+docs/期末试卷题目及答案差异对比报告.md
+scratch/
 *.log
 .DS_Store
