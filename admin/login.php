@@ -18,6 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($admin) {
             // 首先尝试使用password_verify验证密码（标准方式）
             if (password_verify($password, $admin['password'])) {
+                // 重新生成 Session ID 防范会话固定攻击
+                session_regenerate_id(true);
                 // 密码验证成功，登录
                 $_SESSION['admin_id'] = $admin['id'];
                 $_SESSION['admin_username'] = $admin['username'];
@@ -33,16 +35,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 // 检查数据库中的密码是否已经是加密格式（以$2y$开头）
                 if (!preg_match('/^\$2[ayb]\$.{56}$/', $admin['password'])) {
                     // 如果密码不是加密格式，说明是首次登录，更新为加密密码
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare("UPDATE admins SET password = ? WHERE username = ?");
-            $stmt->execute([$hashed_password, $username]);
-            
-            $_SESSION['admin_id'] = $admin['id'];
-            $_SESSION['admin_username'] = $username;
-            logAdminAction($pdo, '管理员登录-初始化加密', 'success', '首次登录自动加密');
-            header('Location: index.php');
-            exit;
-        }
+                    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                    $stmt = $pdo->prepare("UPDATE admins SET password = ? WHERE username = ?");
+                    $stmt->execute([$hashed_password, $username]);
+                    
+                    // 重新生成 Session ID 防范会话固定攻击
+                    session_regenerate_id(true);
+                    
+                    $_SESSION['admin_id'] = $admin['id'];
+                    $_SESSION['admin_username'] = $username;
+                    logAdminAction($pdo, '管理员登录-初始化加密', 'success', '首次登录自动加密');
+                    header('Location: index.php');
+                    exit;
+                }
             }
         }
         

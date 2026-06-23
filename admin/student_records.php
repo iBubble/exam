@@ -35,58 +35,8 @@ if ($student_id > 0) {
         $records = $stmt->fetchAll();
         
         // ========= 计算题目覆盖率（按科目） =========
-        // 1. 该学生在每个科目下刷到过的不同题目数量（只统计当前题库中存在的属于该科目的题目）
-        $stmt = $pdo->prepare("
-            SELECT 
-                p.subject_id,
-                sub.name AS subject_name,
-                COUNT(DISTINCT eq.question_id) AS seen_count
-            FROM exam_records er
-            JOIN exam_questions eq ON eq.exam_record_id = er.id
-            JOIN papers p ON er.paper_id = p.id
-            JOIN questions q ON eq.question_id = q.id AND q.subject_id = p.subject_id
-            LEFT JOIN subjects sub ON p.subject_id = sub.id
-            WHERE er.student_id = ? AND er.status = 'completed'
-            GROUP BY p.subject_id, sub.name
-        ");
-        $stmt->execute([$student_id]);
-        $seen_by_subject = [];
-        foreach ($stmt->fetchAll() as $row) {
-            $sid = (int)$row['subject_id'];
-            if (!$sid) continue;
-            $seen_by_subject[$sid] = [
-                'subject_name' => $row['subject_name'] ?? ('科目ID ' . $sid),
-                'seen_count'   => (int)$row['seen_count'],
-            ];
-        }
-        
-        // 2. 每个科目题库中的总题目数（该系统内所有题，以subject_id区分）
-        $stmt = $pdo->query("
-            SELECT subject_id, COUNT(DISTINCT id) AS total_count
-            FROM questions
-            GROUP BY subject_id
-        ");
-        $total_by_subject = [];
-        foreach ($stmt->fetchAll() as $row) {
-            $sid = (int)$row['subject_id'];
-            if (!$sid) continue;
-            $total_by_subject[$sid] = (int)$row['total_count'];
-        }
-        
-        // 3. 合并为覆盖率统计（仅展示该学生至少刷到过一道题的科目）
-        foreach ($seen_by_subject as $sid => $info) {
-            $total = $total_by_subject[$sid] ?? 0;
-            if ($total <= 0) continue;
-            $seen  = $info['seen_count'];
-            $rate  = $seen > 0 ? ($seen / $total * 100) : 0;
-            $coverage_stats[] = [
-                'subject_id'   => $sid,
-                'subject_name' => $info['subject_name'],
-                'seen_count'   => $seen,
-                'total_count'  => $total,
-                'rate'         => $rate,
-            ];
-        }
+        // 根据该学生班级指定的试卷题目计算覆盖率
+        $coverage_stats = getStudentCoverageStats($pdo, $student_id, $student_info['class'] ?? null);
     }
 }
 ?>
@@ -162,7 +112,7 @@ if ($student_id > 0) {
                     </table>
                 </div>
                 <p style="font-size: 12px; color: #6b7280; margin-top: 6px;">
-                    覆盖率 = 该学生在该科目试卷中刷到过的不同题目数量 ÷ 该科目题库题目总数。
+                    覆盖率 = 该学生在该科目中刷到过的不同题目数量 ÷ 该生班级指定的该科目试卷去重题目总数。
                 </p>
             </div>
             <?php endif; ?>

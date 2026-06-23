@@ -182,7 +182,7 @@ function getPaperActiveState(array $paper): array {
     $now = new DateTimeImmutable('now');
     $is_paused = isset($paper['is_paused']) ? (int)$paper['is_paused'] : 0;
     if ($is_paused === 1) {
-        return ['active' => false, 'reason' => '已暂停'];
+        return ['active' => false, 'reason' => '已停止'];
     }
     if (!empty($paper['start_time'])) {
         try {
@@ -369,4 +369,238 @@ function getRandomItem() {
 function getRandomTitle() {
     $item = getRandomItem();
     return '刷啊刷刷' . $item['unit'] . $item['name'];
+}
+
+/**
+ * 获取指定班级在某个科目下所有可见试卷的去重抽题池（题目 ID 数组）
+ */
+function getStudentSubjectPool(PDO $pdo, ?string $student_class, int $subject_id) {
+    if (!empty($student_class)) {
+        $stmt = $pdo->prepare("SELECT DISTINCT p.id, p.question_paper_ids, p.question_config, p.is_paused, p.start_time, p.end_time 
+                               FROM papers p 
+                               LEFT JOIN paper_classes pc ON p.id = pc.paper_id
+                               WHERE p.subject_id = ? AND (pc.class = ? OR pc.paper_id IS NULL)");
+        $stmt->execute([$subject_id, $student_class]);
+    } else {
+        $stmt = $pdo->prepare("SELECT DISTINCT p.id, p.question_paper_ids, p.question_config, p.is_paused, p.start_time, p.end_time 
+                               FROM papers p 
+                               LEFT JOIN paper_classes pc ON p.id = pc.paper_id
+                               WHERE p.subject_id = ? AND pc.paper_id IS NULL");
+        $stmt->execute([$subject_id]);
+    }
+    $papers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (empty($papers)) {
+        return [];
+    }
+
+    // 过滤出正在进行中的试卷
+    $active_papers = [];
+    foreach ($papers as $paper) {
+        $state = getPaperActiveState($paper);
+        if ($state['active']) {
+            $active_papers[] = $paper;
+        }
+    }
+    $papers = $active_papers;
+    if (empty($papers)) {
+        return [];
+    }
+
+    $clauses = [];
+    $params = [];
+    foreach ($papers as $paper) {
+        $config = json_decode($paper['question_config'], true);
+        if (!$config || !is_array($config)) continue;
+        $types = array_keys($config);
+        if (empty($types)) continue;
+        
+        $type_placeholders = implode(',', array_fill(0, count($types), '?'));
+        $paper_clause = "(question_type IN ($type_placeholders)";
+        foreach ($types as $t) {
+            $params[] = $t;
+        }
+        
+        $paper_ids_str = $paper['question_paper_ids'] ?? '';
+        if (!empty($paper_ids_str)) {
+            $paper_ids = array_filter(array_map('intval', explode(',', $paper_ids_str)));
+            if (!empty($paper_ids)) {
+                $id_placeholders = implode(',', array_fill(0, count($paper_ids), '?'));
+                $paper_clause .= " AND paper_id IN ($id_placeholders)";
+                foreach ($paper_ids as $id) {
+                    $params[] = $id;
+                }
+            }
+        }
+        $paper_clause .= ")";
+        $clauses[] = $paper_clause;
+    }
+
+    if (empty($clauses)) {
+        return [];
+    }
+
+    $sql = "SELECT id FROM questions WHERE subject_id = ? AND (" . implode(' OR ', $clauses) . ")";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute(array_merge([$subject_id], $params));
+    return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/**
+ * 获取指定学生各个科目的题目覆盖率统计
+ */
+function getStudentCoverageStats(PDO $pdo, int $student_id, ?string $student_class) {
+    $stmtSeen = $pdo->prepare("
+        SELECT DISTINCT eq.question_id 
+        FROM exam_questions eq
+        JOIN exam_records er ON eq.exam_record_id = er.id
+        WHERE er.student_id = ? AND er.status = 'completed'
+    ");
+    $stmtSeen->execute([$student_id]);
+    $seen_ids = array_map('intval', $stmtSeen->fetchAll(PDO::FETCH_COLUMN));
+
+    if (!empty($student_class)) {
+        $stmt = $pdo->prepare("SELECT DISTINCT p.id, p.subject_id, s.name as subject_name, p.is_paused, p.start_time, p.end_time 
+                               FROM papers p 
+                               LEFT JOIN subjects s ON p.subject_id = s.id
+                               LEFT JOIN paper_classes pc ON p.id = pc.paper_id
+                               WHERE pc.class = ? OR pc.paper_id IS NULL");
+        $stmt->execute([$student_class]);
+    } else {
+        $stmt = $pdo->prepare("SELECT DISTINCT p.id, p.subject_id, s.name as subject_name, p.is_paused, p.start_time, p.end_time 
+                               FROM papers p 
+                               LEFT JOIN subjects s ON p.subject_id = s.id
+                               LEFT JOIN paper_classes pc ON p.id = pc.paper_id
+                               WHERE pc.paper_id IS NULL");
+        $stmt->execute();
+    }
+    $all_papers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $subjects = [];
+    $seen_subjects = [];
+    foreach ($all_papers as $paper) {
+        $state = getPaperActiveState($paper);
+        if ($state['active']) {
+            $sid = (int)$paper['subject_id'];
+            if ($sid > 0 && !isset($seen_subjects[$sid])) {
+                $seen_subjects[$sid] = true;
+                $subjects[] = [
+                    'subject_id' => $sid,
+                    'subject_name' => $paper['subject_name']
+                ];
+            }
+        }
+    }
+
+    $coverage = [];
+    foreach ($subjects as $sub) {
+        $sid = (int)$sub['subject_id'];
+        if ($sid <= 0) continue;
+
+        $pool = getStudentSubjectPool($pdo, $student_class, $sid);
+        $total_count = count($pool);
+        if ($total_count <= 0) continue;
+
+        $seen_in_pool = array_intersect($pool, $seen_ids);
+        $seen_count = count($seen_in_pool);
+        $rate = round($seen_count / $total_count * 100, 1);
+
+        $coverage[] = [
+            'subject_id' => $sid,
+            'subject_name' => $sub['subject_name'] ?? ('科目ID ' . $sid),
+            'seen_count' => $seen_count,
+            'total_count' => $total_count,
+            'rate' => $rate,
+        ];
+    }
+    return $coverage;
+}
+
+/**
+ * 获取各个班级下每个科目的试卷抽题题目的 ID 集合
+ */
+function getClassSubjectQuestionPools(PDO $pdo) {
+    static $pools = null;
+    if ($pools !== null) {
+        return $pools;
+    }
+    
+    $papers = $pdo->query("SELECT id, subject_id, question_paper_ids, question_config, is_paused, start_time, end_time FROM papers")->fetchAll(PDO::FETCH_ASSOC);
+    
+    // 过滤出所有当前正在进行中的试卷
+    $active_papers = [];
+    foreach ($papers as $paper) {
+        $state = getPaperActiveState($paper);
+        if ($state['active']) {
+            $active_papers[] = $paper;
+        }
+    }
+    $papers = $active_papers;
+    
+    $paper_classes = [];
+    $stmt = $pdo->query("SELECT paper_id, class FROM paper_classes");
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $paper_classes[(int)$row['paper_id']][] = $row['class'];
+    }
+
+    $questions = $pdo->query("SELECT id, subject_id, paper_id, question_type FROM questions")->fetchAll(PDO::FETCH_ASSOC);
+    
+    $all_classes = $pdo->query("SELECT DISTINCT class FROM students WHERE class IS NOT NULL AND class != ''")->fetchAll(PDO::FETCH_COLUMN);
+    $all_classes[] = '';
+
+    $class_subject_papers = [];
+    foreach ($papers as $paper) {
+        $pid = (int)$paper['id'];
+        $sid = (int)$paper['subject_id'];
+        $p_classes = $paper_classes[$pid] ?? [];
+        
+        if (empty($p_classes)) {
+            foreach ($all_classes as $cls) {
+                $class_subject_papers[$cls][$sid][] = $paper;
+            }
+        } else {
+            foreach ($p_classes as $cls) {
+                $class_subject_papers[$cls][$sid][] = $paper;
+            }
+        }
+    }
+
+    $pools = [];
+    foreach ($all_classes as $cls) {
+        if (!isset($class_subject_papers[$cls])) continue;
+        foreach ($class_subject_papers[$cls] as $sid => $papers_list) {
+            $pool = [];
+            foreach ($questions as $q) {
+                $q_sid = (int)$q['subject_id'];
+                if ($q_sid !== $sid) continue;
+                
+                $q_id = (int)$q['id'];
+                $q_type = $q['question_type'];
+                $q_paper_id = $q['paper_id'] !== null ? (int)$q['paper_id'] : null;
+                
+                $match = false;
+                foreach ($papers_list as $paper) {
+                    $config = json_decode($paper['question_config'], true);
+                    if (!$config || !is_array($config)) continue;
+                    if (!isset($config[$q_type])) continue;
+                    
+                    $paper_ids_str = $paper['question_paper_ids'] ?? '';
+                    if (!empty($paper_ids_str)) {
+                        $paper_ids = array_filter(array_map('intval', explode(',', $paper_ids_str)));
+                        if (!empty($paper_ids) && ($q_paper_id === null || !in_array($q_paper_id, $paper_ids))) {
+                            continue;
+                        }
+                    }
+                    
+                    $match = true;
+                    break;
+                }
+                
+                if ($match) {
+                    $pool[] = $q_id;
+                }
+            }
+            $pools[$cls][$sid] = $pool;
+        }
+    }
+    return $pools;
 }

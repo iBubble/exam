@@ -12,7 +12,7 @@ $db_socket = '/tmp/mysql.sock';  // 指定socket路径
 
 try {
     $pdo = new PDO(
-        "mysql:host=127.0.0.1;port=3306;dbname=$db_name;charset=utf8mb4",
+        "mysql:host=localhost;dbname=$db_name;charset=utf8mb4",
         $db_user,
         $db_pass,
         [

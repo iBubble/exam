@@ -28,13 +28,16 @@ if (!empty($student_class)) {
                      ORDER BY p.id DESC");
     $stmt->execute();
 }
-$papers = $stmt->fetchAll();
-foreach ($papers as &$paperItem) {
+$all_papers = $stmt->fetchAll();
+$papers = [];
+foreach ($all_papers as $paperItem) {
     $state = getPaperActiveState($paperItem);
-    $paperItem['is_active'] = $state['active'];
-    $paperItem['state_reason'] = $state['reason'];
+    if ($state['active']) {
+        $paperItem['is_active'] = true;
+        $paperItem['state_reason'] = $state['reason'];
+        $papers[] = $paperItem;
+    }
 }
-unset($paperItem);
 $msg = $_GET['msg'] ?? '';
 $reason = $_GET['reason'] ?? '';
 ?>

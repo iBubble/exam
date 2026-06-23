@@ -23,43 +23,8 @@ unset($recordItem);
 $msg = $_GET['msg'] ?? '';
 $reason = $_GET['reason'] ?? '';
 
-// 统计各科目覆盖率：已刷到的不同题数 / 该科目题库总题数
-$coverage = [];
-// 题库总数
-$stmtTotal = $pdo->query("SELECT subject_id, COUNT(DISTINCT id) AS total_count FROM questions GROUP BY subject_id");
-$total_map = [];
-foreach ($stmtTotal->fetchAll() as $row) {
-    $sid = (int)$row['subject_id'];
-    if ($sid > 0) {
-        $total_map[$sid] = (int)$row['total_count'];
-    }
-}
-// 已刷到的不同题（该学生，已完成考试，只统计当前题库中存在的属于该科目的题目）
-$stmtSeen = $pdo->prepare("
-    SELECT p.subject_id, sub.name AS subject_name, COUNT(DISTINCT eq.question_id) AS seen_count
-    FROM exam_records er
-    JOIN exam_questions eq ON eq.exam_record_id = er.id
-    JOIN papers p ON er.paper_id = p.id
-    JOIN questions q ON eq.question_id = q.id AND q.subject_id = p.subject_id
-    LEFT JOIN subjects sub ON p.subject_id = sub.id
-    WHERE er.student_id = ? AND er.status = 'completed'
-    GROUP BY p.subject_id, sub.name
-");
-$stmtSeen->execute([$_SESSION['student_id']]);
-foreach ($stmtSeen->fetchAll() as $row) {
-    $sid = (int)$row['subject_id'];
-    $seen = (int)$row['seen_count'];
-    $total = $total_map[$sid] ?? 0;
-    if ($total <= 0) continue;
-    $rate = $seen > 0 ? round($seen / $total * 100, 1) : 0;
-    $coverage[] = [
-        'subject_id' => $sid,
-        'subject_name' => $row['subject_name'] ?? ('科目ID ' . $sid),
-        'seen_count' => $seen,
-        'total_count' => $total,
-        'rate' => $rate,
-    ];
-}
+// 统计各科目覆盖率：刷过的题占该生班级指定的试卷的题目总数的覆盖率
+$coverage = getStudentCoverageStats($pdo, $_SESSION['student_id'], $_SESSION['student_class'] ?? null);
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">

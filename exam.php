@@ -706,13 +706,13 @@ foreach ($questions_by_type as $type => $type_questions) {
     <link rel="alternate icon" href="/favicon.svg">
     <link rel="stylesheet" href="css/style.css">
     <!-- Quill 富文本编辑器 - 异步加载，避免阻塞页面渲染 -->
-    <link rel="preload" href="https://cdn.quilljs.com/1.3.6/quill.snow.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet"></noscript>
+    <link rel="preload" href="css/quill.snow.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link href="css/quill.snow.css" rel="stylesheet"></noscript>
     <script>
         // 异步加载Quill.js，避免阻塞页面渲染
         (function() {
             var script = document.createElement('script');
-            script.src = 'https://cdn.quilljs.com/1.3.6/quill.js';
+            script.src = 'js/quill.js';
             script.async = true;
             script.defer = true;
             document.head.appendChild(script);

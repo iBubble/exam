@@ -48,71 +48,125 @@ $order_sql = " ORDER BY " . $allowed_sort[$sort_by] . " " . strtoupper($sort_dir
 $stmtSubjects = $pdo->query("SELECT id, name FROM subjects ORDER BY id ASC");
 $subjects = $stmtSubjects->fetchAll();
 
-// ---- 构建基础 SQL（供统计和分页使用）----
-$base_sql = "
-        FROM students s
-    JOIN subjects sub ON 1=1
-    LEFT JOIN (
-        -- 学生在该科目刷到过的不同题目数量（已完成的考试，只统计当前题库中存在的题目）
-        SELECT 
-            er.student_id,
-            p.subject_id,
-            COUNT(DISTINCT eq.question_id) AS seen_count
-        FROM exam_records er
-        JOIN exam_questions eq ON eq.exam_record_id = er.id
-        JOIN papers p ON er.paper_id = p.id
-        JOIN questions q ON eq.question_id = q.id AND q.subject_id = p.subject_id
-        WHERE er.status = 'completed'
-        GROUP BY er.student_id, p.subject_id
-    ) AS seen ON seen.student_id = s.id AND seen.subject_id = sub.id
-    LEFT JOIN (
-        -- 最近刷题时间（已完成的考试，使用最近一次考试的开始时间）
-        SELECT
-            er.student_id,
-            p.subject_id,
-            MAX(er.start_time) AS last_practice_at
-        FROM exam_records er
-        JOIN papers p ON er.paper_id = p.id
-        WHERE er.status = 'completed'
-        GROUP BY er.student_id, p.subject_id
-    ) AS latest ON latest.student_id = s.id AND latest.subject_id = sub.id
-    LEFT JOIN (
-        -- 刷题次数（该学生在该科目完成的考试次数）
-        SELECT
-            er.student_id,
-            p.subject_id,
-            COUNT(*) AS exam_count
-        FROM exam_records er
-        JOIN papers p ON er.paper_id = p.id
-        WHERE er.status = 'completed'
-        GROUP BY er.student_id, p.subject_id
-    ) AS exam_count ON exam_count.student_id = s.id AND exam_count.subject_id = sub.id
-    LEFT JOIN (
-        -- 该科目题库总题目数
-        SELECT subject_id, COUNT(DISTINCT id) AS total_count
-        FROM questions
-        GROUP BY subject_id
-    ) AS qs ON qs.subject_id = sub.id
-    WHERE qs.total_count IS NOT NULL AND qs.total_count > 0
-";
+// ---- 1. 获取所有班级与科目的抽题池 ----
+$class_subject_pools = getClassSubjectQuestionPools($pdo);
 
-// 按科目筛选
-$params = [];
+// ---- 2. 获取所有科目 ----
+$subjects_query = "SELECT id, name FROM subjects ORDER BY id ASC";
+$subjects_stmt = $pdo->query($subjects_query);
+$subjects_list = $subjects_stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$filtered_subjects = $subjects_list;
 if ($subject_id > 0) {
-    $base_sql .= " AND sub.id = :subject_id ";
-    $params[':subject_id'] = $subject_id;
+    $filtered_subjects = [];
+    foreach ($subjects_list as $sub) {
+        if ((int)$sub['id'] === $subject_id) {
+            $filtered_subjects[] = $sub;
+            break;
+        }
+    }
 }
 
-// ---- 先统计总行数以便分页 ----
-$count_sql = "SELECT COUNT(*) AS cnt " . $base_sql;
-$stmt = $pdo->prepare($count_sql);
-foreach ($params as $k => $v) {
-    $stmt->bindValue($k, $v, PDO::PARAM_INT);
-}
-$stmt->execute();
-$total_rows = (int)($stmt->fetch()['cnt'] ?? 0);
+// ---- 3. 获取所有学生 ----
+$students = $pdo->query("SELECT id, student_no, name, class FROM students ORDER BY student_no ASC")->fetchAll(PDO::FETCH_ASSOC);
 
-// 计算分页
+// ---- 4. 生成有指定试卷的组合行 ----
+$all_rows = [];
+foreach ($students as $student) {
+    $cls = $student['class'] ?? '';
+    $student_id = (int)$student['id'];
+    foreach ($filtered_subjects as $sub) {
+        $sid = (int)$sub['id'];
+        $pool = $class_subject_pools[$cls][$sid] ?? [];
+        if (empty($pool)) continue;
+        
+        $all_rows[] = [
+            'student_id' => $student_id,
+            'student_no' => $student['student_no'],
+            'student_name' => $student['name'] ?? '',
+            'class' => $cls,
+            'subject_id' => $sid,
+            'subject_name' => $sub['name'],
+            'total_count' => count($pool),
+            'pool' => $pool,
+        ];
+    }
+}
+
+// ---- 5. 批量查询已完成考试的统计数据 ----
+$stats_map = [];
+$stmtStats = $pdo->query("
+    SELECT 
+        er.student_id,
+        p.subject_id,
+        COUNT(*) AS exam_count,
+        MAX(er.start_time) AS last_practice_at,
+        SUBSTRING_INDEX(GROUP_CONCAT(er.ip ORDER BY er.start_time DESC), ',', 1) AS last_ip
+    FROM exam_records er
+    JOIN papers p ON er.paper_id = p.id
+    WHERE er.status = 'completed'
+    GROUP BY er.student_id, p.subject_id
+");
+foreach ($stmtStats->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $key = $row['student_id'] . '_' . $row['subject_id'];
+    $stats_map[$key] = $row;
+}
+
+// ---- 6. 批量查询所有学生的已刷题ID列表 ----
+$student_seen = [];
+$stmtSeen = $pdo->query("
+    SELECT er.student_id, eq.question_id 
+    FROM exam_records er
+    JOIN exam_questions eq ON eq.exam_record_id = er.id
+    WHERE er.status = 'completed'
+");
+while ($row = $stmtSeen->fetch(PDO::FETCH_ASSOC)) {
+    $student_seen[(int)$row['student_id']][] = (int)$row['question_id'];
+}
+
+// ---- 7. 补全每一行的 seen_count, rate, exam_count, last_practice_at, last_ip ----
+foreach ($all_rows as &$row) {
+    $key = $row['student_id'] . '_' . $row['subject_id'];
+    $stats = $stats_map[$key] ?? null;
+    $row['exam_count'] = $stats ? (int)$stats['exam_count'] : 0;
+    $row['last_practice_at'] = $stats ? $stats['last_practice_at'] : null;
+    $row['last_ip'] = $stats ? $stats['last_ip'] : '-';
+    
+    $seen_qids = $student_seen[$row['student_id']] ?? [];
+    if (empty($seen_qids)) {
+        $row['seen_count'] = 0;
+        $row['rate'] = 0.0;
+    } else {
+        $seen_in_pool = array_intersect($row['pool'], $seen_qids);
+        $row['seen_count'] = count($seen_in_pool);
+        $row['rate'] = round($row['seen_count'] / $row['total_count'] * 100, 1);
+    }
+}
+unset($row);
+
+// ---- 8. 排序 ----
+usort($all_rows, function($a, $b) use ($sort_by, $sort_dir) {
+    $valA = $a[$sort_by] ?? null;
+    $valB = $b[$sort_by] ?? null;
+    
+    if ($valA === $valB) {
+        return $a['student_id'] <=> $b['student_id'];
+    }
+    
+    if ($valA === null) return 1;
+    if ($valB === null) return -1;
+    
+    if (is_string($valA)) {
+        $cmp = strcasecmp($valA, $valB);
+    } else {
+        $cmp = $valA <=> $valB;
+    }
+    
+    return $sort_dir === 'asc' ? $cmp : -$cmp;
+});
+
+// ---- 9. 分页 ----
+$total_rows = count($all_rows);
 $total_pages = 1;
 $offset = 0;
 if ($per_page > 0) {
@@ -121,62 +175,10 @@ if ($per_page > 0) {
         $page = $total_pages;
     }
     $offset = ($page - 1) * $per_page;
+    $rows = array_slice($all_rows, $offset, $per_page);
+} else {
+    $rows = $all_rows;
 }
-
-// ---- 检查exam_records表是否有ip字段 ----
-$has_ip_field = false;
-try {
-    $stmt_check = $pdo->query("SHOW COLUMNS FROM exam_records LIKE 'ip'");
-    $has_ip_field = $stmt_check->rowCount() > 0;
-} catch (Exception $e) {
-    $has_ip_field = false;
-}
-
-// ---- 查询当前页数据 ----
-$ip_subquery = $has_ip_field ? "
-    , (SELECT er.ip FROM exam_records er 
-       JOIN papers p ON er.paper_id = p.id 
-       WHERE er.student_id = s.id 
-       AND p.subject_id = sub.id
-       AND er.status = 'completed'
-       ORDER BY er.start_time DESC 
-       LIMIT 1) AS last_ip
-" : "
-    , '' AS last_ip
-";
-
-$data_sql = "
-    SELECT
-        s.id AS student_id,
-        s.student_no,
-        s.name AS student_name,
-        sub.id AS subject_id,
-        sub.name AS subject_name,
-        IFNULL(seen.seen_count, 0) AS seen_count,
-        IFNULL(qs.total_count, 0) AS total_count,
-        CASE 
-            WHEN qs.total_count IS NULL OR qs.total_count = 0 THEN 0
-            WHEN seen.seen_count > qs.total_count THEN 100.0
-            ELSE ROUND(seen.seen_count / qs.total_count * 100, 1)
-        END AS rate,
-        IFNULL(exam_count.exam_count, 0) AS exam_count,
-        latest.last_practice_at
-        " . $ip_subquery . "
-" . $base_sql . $order_sql;
-if ($per_page > 0) {
-    $data_sql .= " LIMIT :limit OFFSET :offset";
-}
-
-$stmt = $pdo->prepare($data_sql);
-foreach ($params as $k => $v) {
-    $stmt->bindValue($k, $v, PDO::PARAM_INT);
-}
-if ($per_page > 0) {
-    $stmt->bindValue(':limit', $per_page, PDO::PARAM_INT);
-    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-}
-$stmt->execute();
-$rows = $stmt->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">

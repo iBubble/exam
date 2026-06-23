@@ -54,9 +54,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $student_id = $student['id'];
             $student_name = $student['name'] ?? null;
             $student_class = $student['class'] ?? null;
+            
+            // 重新生成 Session ID 防范会话固定攻击
+            session_regenerate_id(true);
         
-        $_SESSION['student_id'] = $student_id;
-        $_SESSION['student_no'] = $student_no;
+            $_SESSION['student_id'] = $student_id;
+            $_SESSION['student_no'] = $student_no;
             $_SESSION['student_name'] = $student_name;
             $_SESSION['student_class'] = $student_class;
             
@@ -64,8 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['site_title'] = "刷啊刷刷" . $item_unit . $item_name;
             $_SESSION['site_emoji'] = $item_emoji;
             
-        header('Location: exam_list.php');
-        exit;
+            header('Location: exam_list.php');
+            exit;
         }
     } else {
         $error = '请输入学号！';

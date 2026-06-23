@@ -250,19 +250,19 @@ if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id']))
     }
 }
 
-// 暂停/恢复试卷
+// 停止/开始试卷
 if (isset($_GET['action']) && in_array($_GET['action'], ['pause', 'resume']) && isset($_GET['id'])) {
     $id = intval($_GET['id']);
     $flag = $_GET['action'] === 'pause' ? 1 : 0;
     $stmt = $pdo->prepare("UPDATE papers SET is_paused = ?, updated_at = NOW() WHERE id = ?");
     if ($stmt->execute([$flag, $id])) {
-        $message = $flag ? '试卷已暂停' : '试卷已恢复';
+        $message = $flag ? '试卷已停止' : '试卷已开始';
         $message_type = 'success';
-        logAdminAction($pdo, $flag ? '暂停试卷' : '恢复试卷', 'success', "ID={$id}");
+        logAdminAction($pdo, $flag ? '停止试卷' : '开始试卷', 'success', "ID={$id}");
     } else {
         $message = '操作失败，请稍后重试';
         $message_type = 'error';
-        logAdminAction($pdo, $flag ? '暂停试卷' : '恢复试卷', 'failed', "ID={$id}");
+        logAdminAction($pdo, $flag ? '停止试卷' : '开始试卷', 'failed', "ID={$id}");
     }
 }
 
@@ -660,11 +660,11 @@ unset($paperItem);
                                         <?php if (isset($paper['is_paused']) && (int)$paper['is_paused'] === 1): ?>
                                             <a href="?action=resume&id=<?php echo $paper['id']; ?><?php echo $action_url_suffix; ?>" 
                                                class="btn btn-warning" 
-                                               onclick="return confirm('恢复后学生可以按时间窗口进入考试，确认恢复吗？');">恢复</a>
+                                               onclick="return confirm('开始后学生可以按时间窗口进入考试，确认开始吗？');">开始</a>
                                         <?php else: ?>
                                             <a href="?action=pause&id=<?php echo $paper['id']; ?><?php echo $action_url_suffix; ?>" 
                                                class="btn btn-secondary" 
-                                               onclick="return confirm('暂停后学生无法进入或查看该考试，确认暂停吗？');">暂停</a>
+                                               onclick="return confirm('停止后学生无法进入或查看该考试，确认停止吗？');">停止</a>
                                         <?php endif; ?>
                                         <a href="?action=delete&id=<?php echo $paper['id']; ?><?php echo $action_url_suffix; ?>" 
                                            class="btn btn-danger" 
